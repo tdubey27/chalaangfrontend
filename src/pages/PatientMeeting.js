@@ -1,60 +1,56 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import Mic from "../components/Mic";
-
-// Import shared recording utilities
 import { startMicrophoneRecording, stopMicrophoneRecording, sendAudioToBackend } from "../utils/recordUtils";
 
 export default function PatientMeeting() {
-  const [sessionActive, setSessionActive] = useState(false); // Toggle session state
-  const [transcripts, setTranscripts] = useState([]); // Store live transcripts
-  const [recorder, setRecorder] = useState(null); // MediaRecorder instance
-  const [uploadTimer, setUploadTimer] = useState(null); // Timer for periodic uploads
-  const [startTime, setStartTime] = useState(null); // Timestamp for session start
-  const audioBuffer = []; // Buffer to hold audio chunks temporarily
+  const [sessionActive, setSessionActive] = useState(false);
+  const [transcripts, setTranscripts] = useState([]);
+  const recorderRef = useRef(null); // <-- useRef for recorder
+  const uploadTimerRef = useRef(null);
+  const startTimeRef = useRef(null);
+  const audioBufferRef = useRef([]); // <-- useRef for buffer
 
-  // Fetch example user and meeting data dynamically
-  const meetingId = localStorage.getItem("meetingId") || "12345"; // Replace with actual dynamic logic
-  const role = "Patient"; // Define user role dynamically if needed
+  const meetingId = localStorage.getItem("meetingId") || "12345";
+  const role = "Patient";
 
-  const addTranscript = (line) => setTranscripts((prev) => [...prev, line]); // Append transcript lines to list
+  const addTranscript = (line) => setTranscripts((prev) => [...prev, line]);
 
-  // Handle WebSocket for Live Transcripts
+  // WebSocket for live transcript
   useEffect(() => {
     let ws;
     if (sessionActive) {
-      ws = new WebSocket("ws://localhost:8080"); // Replace with your WebSocket server URL
-      ws.onmessage = (event) => addTranscript(event.data); // Push incoming message to transcript
+      ws = new WebSocket("ws://localhost:8080");
+      ws.onmessage = (event) => addTranscript(event.data);
     }
-
     return () => {
-      if (ws) ws.close(); // Cleanup WebSocket connection
+      if (ws) ws.close();
     };
   }, [sessionActive]);
 
-  // **Start Recording Logic using Utils**
+  // Start recording
   const startRecording = () => {
     startMicrophoneRecording({
-      setRecorder,
-      setStartTime,
-      setUploadTimer,
-      audioBuffer,
+      setRecorder: (rec) => (recorderRef.current = rec),
+      setStartTime: (time) => (startTimeRef.current = time),
+      setUploadTimer: (timer) => (uploadTimerRef.current = timer),
+      audioBuffer: audioBufferRef.current,
       sendAudioToBackend: (chunk, timestamp) =>
-        sendAudioToBackend(chunk, timestamp, meetingId, role), // Pass meetingId and role dynamically
+        sendAudioToBackend(chunk, timestamp, meetingId, role),
     });
     console.log("Started audio recording for Patient.");
   };
 
-  // **Stop Recording Logic using updated Utils**
+  // Stop recording
   const stopRecording = async () => {
     stopMicrophoneRecording({
-      recorder,
-      audioBuffer,
-      setUploadTimer,
+      recorder: recorderRef.current,
+      audioBuffer: audioBufferRef.current,
+      setUploadTimer: (timer) => clearInterval(timer || uploadTimerRef.current),
       sendAudioToBackend: (chunk, timestamp) =>
-        sendAudioToBackend(chunk, timestamp, meetingId, role), // Pass meetingId and role dynamically
-      startTime,
+        sendAudioToBackend(chunk, timestamp, meetingId, role),
+      startTime: startTimeRef.current,
     });
     console.log("Stopped audio recording for Patient.");
   };
@@ -88,12 +84,12 @@ export default function PatientMeeting() {
 
       <Footer
         onStart={() => {
-          setSessionActive(true); // Activate session
-          startRecording(); // Start recording
+          setSessionActive(true);
+          startRecording();
         }}
         onStop={() => {
-          setSessionActive(false); // Deactivate session
-          stopRecording(); // Stop recording and cleanup
+          setSessionActive(false);
+          stopRecording();
         }}
         onSummary={() => alert("Summary is available only for doctors.")}
       />
