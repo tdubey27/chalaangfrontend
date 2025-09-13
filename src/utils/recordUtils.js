@@ -90,7 +90,7 @@ export const sendAudioToBackend = async (chunk, timestamp, meetingId, user) => {
     formData.append("meetingId", meetingId); // Attach meeting ID
     formData.append("user", user); // Attach user role (e.g., "Doctor", "Patient")
 
-    const response = await fetch("http://localhost:8000/api/v1/transcribe", {
+    const response = await fetch("http://localhost:8001/api/v1/transcribe", {
       method: "POST",
       body: formData, // Send FormData payload
     });

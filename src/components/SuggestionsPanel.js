@@ -75,7 +75,7 @@ export default function SuggestionsPanel({ suggestions, addNote }) {
   console.log(suggestions,"sss")
 
   return (
-    <div className="hidden md:flex flex-col w-1/4 h-full gap-4">
+    <div className="hidden md:flex flex-col w-1/4 max-h-[80vh] overflow-y-auto gap-4">
       <h2 className="text-xl font-bold mb-3 text-[#582CDB] flex items-center gap-2">
         💡 Suggested Questions
       </h2>
