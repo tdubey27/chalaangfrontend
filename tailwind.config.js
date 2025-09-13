@@ -1,18 +1,25 @@
-/** @type {import('tailwindcss').Config} */
+// tailwind.config.js
 module.exports = {
   content: ["./src/**/*.{js,jsx}", "./public/index.html"],
   theme: {
     extend: {
+      colors: {
+        majorelle: "#582CDB",
+        electricGreen: "#0BCF00",
+        "majorelle-light": "#EDEBFF",
+        "green-accent-light": "#E8FFE8",
+        "green-accent": "#0BCF00"
+      },
       animation: {
-        fadeIn: "fadeIn 0.3s ease-in-out"
+        slideFade: "slideFade 0.4s ease-out"
       },
       keyframes: {
-        fadeIn: {
-          "0%": { opacity: 0 },
-          "100%": { opacity: 1 }
+        slideFade: {
+          "0%": { opacity: 0, transform: "translateY(15px)" },
+          "100%": { opacity: 1, transform: "translateY(0)" }
         }
       }
     }
   },
-  plugins: []
+  plugins: [],
 };
