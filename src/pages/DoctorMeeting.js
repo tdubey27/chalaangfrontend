@@ -33,7 +33,7 @@ const fetchSuggestionsAndTranscripts = async () => {
   try {
     // Pass meetingId as a query parameter in the URL
     const response = await fetch(
-      `https://f11f8e9d04d6.ngrok-free.app/api/v1/${meetingId}/transcript`,
+      `http://localhost:8001/api/v1/${meetingId}/transcript`,
       {
         method: "GET",
         headers: {
@@ -165,7 +165,7 @@ const fetchSuggestionsAndTranscripts = async () => {
       console.error("Error uploading audio chunk:", error);
     }
   };
-
+console.log(suggestions)
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
       <Header />
