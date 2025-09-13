@@ -106,9 +106,9 @@ export default function DoctorMeeting() {
     try {
       // Retrieve meetingId and role from localStorage
       const meetingId = localStorage.getItem("meetingId");
-      const role = localStorage.getItem("role");
+      const user = localStorage.getItem("role");
 
-      if (!meetingId || !role) {
+      if (!meetingId || !user) {
         console.error("Meeting ID or Role is missing from localStorage!");
         return;
       }
@@ -120,7 +120,7 @@ export default function DoctorMeeting() {
       formData.append("audioBlob", audioBlob); // Attach audio Blob
       formData.append("timestamp", timestamp.toString()); // Attach timestamp
       formData.append("meetingId", meetingId); // Attach meeting ID
-      formData.append("role", role); // Attach role
+      formData.append("user", user); // Attach role
 
       const response = await fetch("http://localhost:8080/upload-audio-chunk", {
         method: "POST",
