@@ -14,6 +14,8 @@ export default function DoctorMeeting() {
   const [startTime, setStartTime] = useState(null); // Timestamp for session start
   const [recorder, setRecorder] = useState(null); // MediaRecorder instance
   let audioBuffer = []; // Local buffer for audio chunks
+  const [data, setData] = useState([])
+  const [trans, setTrans] = useState([])
 
   // Fetch meetingId from localStorage
   const meetingId = localStorage.getItem("meetingId");
@@ -45,6 +47,8 @@ const fetchSuggestionsAndTranscripts = async () => {
     if (response.ok) {
       const data = await response.json(); // Parse the response as JSON
       console.log("API Response:", data);
+      setData(data)
+      setTrans(data.transcript)
 
       // Update state for suggestions and transcripts with the received data
       if (data.suggestions) setSuggestions(data.suggestions);
@@ -64,115 +68,190 @@ const fetchSuggestionsAndTranscripts = async () => {
   }, []);
 
   // Start recording function
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      console.log("Microphone stream obtained:", stream);
+  // const startRecording = async () => {
+  //   try {
+  //     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  //     console.log("Microphone stream obtained:", stream);
 
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-      setRecorder(mediaRecorder);
+  //     const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+  //     setRecorder(mediaRecorder);
 
-      const initialTimestamp = Date.now();
-      setStartTime(initialTimestamp); // Save session start timestamp
+  //     const initialTimestamp = Date.now();
+  //     setStartTime(initialTimestamp); // Save session start timestamp
 
-      console.log("Recording started...");
-      audioBuffer = []; // Clear buffer
+  //     console.log("Recording started...");
+  //     audioBuffer = []; // Clear buffer
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioBuffer.push(event.data);
-          console.log("Audio chunk collected:", event.data);
-        }
-      };
+  //     mediaRecorder.ondataavailable = (event) => {
+  //       if (event.data.size > 0) {
+  //         audioBuffer.push(event.data);
+  //         console.log("Audio chunk collected:", event.data);
+  //       }
+  //     };
 
-      mediaRecorder.start(500);
+  //     mediaRecorder.start(500);
 
-      const interval = setInterval(() => {
-        if (audioBuffer.length > 0) {
-          const chunk = audioBuffer.shift();
-          const timestamp = Date.now() - initialTimestamp;
-          sendAudioToBackend(chunk, timestamp);
-        } else {
-          console.log("Audio buffer empty, waiting for chunks...");
-        }
-      }, 4000);
+  //     const interval = setInterval(() => {
+  //       if (audioBuffer.length > 0) {
+  //         const chunk = audioBuffer.shift();
+  //         const timestamp = Date.now() - initialTimestamp;
+  //         sendAudioToBackend(chunk, timestamp);
+  //       } else {
+  //         console.log("Audio buffer empty, waiting for chunks...");
+  //       }
+  //     }, 4000);
 
-      setUploadTimer(interval);
-    } catch (error) {
-      console.error("Error starting microphone recording:", error);
-    }
-  };
+  //     setUploadTimer(interval);
+  //   } catch (error) {
+  //     console.error("Error starting microphone recording:", error);
+  //   }
+  // };
 
-  const stopRecording = () => {
-    if (recorder && recorder.state !== "inactive") {
-      recorder.stop();
+  // const stopRecording = () => {
+  //   if (recorder && recorder.state !== "inactive") {
+  //     recorder.stop();
 
-      recorder.onstop = async () => {
-        console.log("Recorder stopped. Uploading remaining audio chunks...");
-        for (const chunk of audioBuffer) {
-          const timestamp = Date.now() - startTime;
-          await sendAudioToBackend(chunk, timestamp);
-        }
-        audioBuffer = [];
-      };
-    }
+  //     recorder.onstop = async () => {
+  //       console.log("Recorder stopped. Uploading remaining audio chunks...");
+  //       for (const chunk of audioBuffer) {
+  //         const timestamp = Date.now() - startTime;
+  //         await sendAudioToBackend(chunk, timestamp);
+  //       }
+  //       audioBuffer = [];
+  //     };
+  //   }
 
-    if (uploadTimer) {
-      clearInterval(uploadTimer);
-      setUploadTimer(null);
-    }
+  //   if (uploadTimer) {
+  //     clearInterval(uploadTimer);
+  //     setUploadTimer(null);
+  //   }
 
-    console.log("Recording stopped.");
-  };
+  //   console.log("Recording stopped.");
+  // };
 
-  const sendAudioToBackend = async (chunk, timestamp) => {
-    try {
-      if (!meetingId) {
-        console.error("Meeting ID is missing from localStorage!");
-        return;
+// temporary collector filled by MediaRecorder
+let uploadQueue = []; // queued chunks waiting to be sent
+let isSending = false; // single in-flight guard
+let recorderRef = null;
+let uploadTimerRef = null;
+
+const sendAudioToBackend = async (blob, timestamp) => {
+  // Implement your actual POST here and return the response Promise
+  // Example (adjust endpoint & headers):
+  const form = new FormData();
+  form.append("audioBlob", blob, `chunk-${timestamp}.wav`);
+  form.append("timestamp", String(timestamp));
+  form.append("user", "Mister (Doctor)")
+  form.append("meetingId", "test_2")
+  const resp = await fetch("http://localhost:8001/api/v1/transcribe", { method: "POST", body: form });
+   const data = await resp.json();
+  setTrans(data.response)
+  if (!resp.ok) throw new Error("Upload failed");
+  return resp.json(); // or resp.text() depending on your API
+};
+
+const processQueue = async () => {
+  // If a request is ongoing or nothing to send, exit.
+  if (isSending || uploadQueue.length === 0) return;
+
+  isSending = true;
+  try {
+    // send items sequentially until queue is empty or an error occurs
+    while (uploadQueue.length > 0) {
+      const { blob, timestamp } = uploadQueue.shift();
+      try {
+        // await server response before continuing
+        const result = await sendAudioToBackend(blob, timestamp);
+        // optional: handle server result (update UI, store id, etc.)
+        console.log("Chunk uploaded, server result:", result);
+      } catch (err) {
+        console.error("Error uploading chunk:", err);
+        // On failure: you can re-queue the chunk, drop it, or retry with backoff.
+        // Simple approach: push it back and break to avoid tight retry loop:
+        uploadQueue.unshift({ blob, timestamp });
+        break;
       }
+    }
+  } finally {
+    isSending = false;
+  }
+};
 
-      const audioBlob = new Blob([chunk], { type: "audio/wav" });
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    console.log("Microphone stream obtained:", stream);
 
-      const formData = new FormData();
-      formData.append("audioBlob", audioBlob, `audio_${timestamp}.wav`);
-      formData.append("timestamp", timestamp.toString());
-      formData.append("meetingId", meetingId);
-      formData.append("user", localStorage.getItem("role"));
+    const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+    recorderRef = mediaRecorder;
 
-      const response = await fetch(
-        "https://9d1d15c9f81f.ngrok-free.app/api/v1/transcribe",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+    const initialTimestamp = Date.now();
+    setStartTime(initialTimestamp);
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Response from backend:", data);
+    console.log("Recording started...");
+    audioBuffer = []; // clear buffer
+    uploadQueue = []; // clear queue
 
-        if (data.transcript) {
-          setTranscripts((prev) => [...prev, data.transcript]);
-        }
-        if (data.summary) {
-          console.log("Summary received:", data.summary);
-        }
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        // push into temporary buffer
+        audioBuffer.push(event.data);
+        console.log("Audio chunk collected into audioBuffer:", event.data);
+
+        // Optionally push directly into uploadQueue (no need to wait for interval)
+        // but we keep interval logic to control pacing. If you prefer immediate queueing:
+        // const ts = Date.now() - initialTimestamp;
+        // uploadQueue.push({ blob: event.data, timestamp: ts });
+        // processQueue();
+      }
+    };
+
+    mediaRecorder.start(500); // collects chunks every 500ms (as before)
+
+    // Interval moves one chunk from audioBuffer -> uploadQueue every 4s (your previous behavior)
+    const interval = setInterval(() => {
+      if (audioBuffer.length > 0) {
+        const chunk = audioBuffer.shift();
+        const timestamp = Date.now() - initialTimestamp;
+        uploadQueue.push({ blob: chunk, timestamp });
+        console.log("Moved chunk to uploadQueue (queued):", timestamp, "queueLen:", uploadQueue.length);
+        // start processing if not already sending
+        processQueue();
       } else {
-        throw new Error(`Audio upload failed with status: ${response.statusText}`);
+        console.log("Audio buffer empty, waiting for chunks...");
       }
-    } catch (error) {
-      console.error("Error uploading audio chunk:", error);
+    }, 4000);
+
+    uploadTimerRef = interval;
+  } catch (error) {
+    console.error("Error starting microphone recording:", error);
+  }
+};
+
+const stopRecording = () => {
+  try {
+    if (recorderRef && recorderRef.state !== "inactive") {
+      recorderRef.stop();
     }
-  };
-console.log(suggestions)
+    if (uploadTimerRef) {
+      clearInterval(uploadTimerRef);
+      uploadTimerRef = null;
+    }
+    // Optionally process remaining queued chunks before fully stopping:
+    processQueue().catch((e) => console.error("Error processing remaining queue:", e));
+  } catch (e) {
+    console.error("Error stopping recording:", e);
+  }
+};
+
+console.log("trans", trans)
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
       <Header />
 
       <div className="flex flex-1 w-full p-6 gap-6">
         {/* Suggestions Panel */}
-        <SuggestionsPanel suggestions={suggestions} addNote={addNote} />
+        <SuggestionsPanel suggestions={data.suggestion} addNote={addNote} />
 
         {/* Center Panel - Mic */}
         <div className="flex-1 flex flex-col items-center justify-center">
@@ -181,15 +260,16 @@ console.log(suggestions)
 
         {/* Transcript + Meeting Notes Buttons */}
         <div className="w-1/4 flex flex-col items-stretch gap-3">
-          <div className="bg-white rounded-2xl shadow p-4 overflow-y-auto max-h-60">
+          <div className="bg-white rounded-2xl shadow p-4 overflow-y-auto max-h-screen">
             <h2 className="text-lg font-bold text-[#582CDB] mb-2">Live Transcript</h2>
-            {transcripts.length === 0 ? (
+            {data?.transcript?.length === 0 ? (
               <p className="text-gray-400 italic">No transcript yet...</p>
             ) : (
               <ul className="list-disc list-inside space-y-1">
-                {transcripts.map((line, idx) => (
-                  <li key={idx}>{line}</li>
-                ))}
+                {trans?.map((transcriptItem, index) => (
+  <li key={index}>{transcriptItem}</li>
+))}
+              
               </ul>
             )}
           </div>
