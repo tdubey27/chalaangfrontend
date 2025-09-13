@@ -14,6 +14,7 @@ export default function DoctorMeeting() {
   const [startTime, setStartTime] = useState(null); // Timestamp for session start
   const [recorder, setRecorder] = useState(null); // MediaRecorder instance
   let audioBuffer = []; // Local buffer for audio chunks
+  const [data, setData] = useState([])
 
   // Fetch meetingId from localStorage
   const meetingId = localStorage.getItem("meetingId");
@@ -45,6 +46,7 @@ const fetchSuggestionsAndTranscripts = async () => {
     if (response.ok) {
       const data = await response.json(); // Parse the response as JSON
       console.log("API Response:", data);
+      setData(data)
 
       // Update state for suggestions and transcripts with the received data
       if (data.suggestions) setSuggestions(data.suggestions);
@@ -141,7 +143,7 @@ const fetchSuggestionsAndTranscripts = async () => {
       formData.append("user", localStorage.getItem("role"));
 
       const response = await fetch(
-        "https://9d1d15c9f81f.ngrok-free.app/api/v1/transcribe",
+        "http://localhost:8001/api/v1/transcribe",
         {
           method: "POST",
           body: formData,
@@ -165,14 +167,14 @@ const fetchSuggestionsAndTranscripts = async () => {
       console.error("Error uploading audio chunk:", error);
     }
   };
-console.log(suggestions)
+console.log(suggestions,"sug", data.transcript)
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
       <Header />
 
       <div className="flex flex-1 w-full p-6 gap-6">
         {/* Suggestions Panel */}
-        <SuggestionsPanel suggestions={suggestions} addNote={addNote} />
+        <SuggestionsPanel suggestions={data.suggestion} addNote={addNote} />
 
         {/* Center Panel - Mic */}
         <div className="flex-1 flex flex-col items-center justify-center">
@@ -183,13 +185,12 @@ console.log(suggestions)
         <div className="w-1/4 flex flex-col items-stretch gap-3">
           <div className="bg-white rounded-2xl shadow p-4 overflow-y-auto max-h-60">
             <h2 className="text-lg font-bold text-[#582CDB] mb-2">Live Transcript</h2>
-            {transcripts.length === 0 ? (
+            {data?.transcript?.length === 0 ? (
               <p className="text-gray-400 italic">No transcript yet...</p>
             ) : (
               <ul className="list-disc list-inside space-y-1">
-                {transcripts.map((line, idx) => (
-                  <li key={idx}>{line}</li>
-                ))}
+                <li>{data.transcript}</li>
+              
               </ul>
             )}
           </div>

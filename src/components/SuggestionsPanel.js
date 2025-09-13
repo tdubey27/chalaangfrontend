@@ -72,52 +72,57 @@ export default function SuggestionsPanel({ suggestions, addNote }) {
     console.debug("localSuggestions:", localSuggestions);
   }, [localSuggestions]);
 
+  console.log(suggestions,"sss")
+
   return (
     <div className="hidden md:flex flex-col w-1/4 h-full gap-4">
       <h2 className="text-xl font-bold mb-3 text-[#582CDB] flex items-center gap-2">
         💡 Suggested Questions
       </h2>
 
-      {suggestions.length > 0 ? (
-        suggestions.map((q, idx) => (
-          <div
-            key={idx}
-            className="bg-white rounded-2xl shadow-[0_2px_6px_rgba(149,115,247,0.2)] 
-                       hover:shadow-[0_4px_12px_rgba(149,115,247,0.4)] transition flex flex-col gap-2 p-4"
-          >
-            {q.isEditing ? (
-              <input
-                type="text"
-                value={q.clarifying_questions[0]}
-                onChange={(e) => editQuestion(idx, e.target.value)}
-                className="w-full border border-gray-200 rounded-md p-1 focus:outline-none focus:ring-2 focus:ring-purple-400"
-              />
-            ) : (
-              <p className="text-gray-800">{q.text}</p>
-            )}
+      {Array.isArray(suggestions) && suggestions.length > 0 ? (
+  suggestions
+    .filter((s) => s.prompt_question)
+    .map((s, idx) => (
+      <div
+        key={idx}
+        className="bg-white rounded-2xl shadow-[0_2px_6px_rgba(149,115,247,0.2)] 
+                   hover:shadow-[0_4px_12px_rgba(149,115,247,0.4)] transition flex flex-col gap-3 p-4"
+      >
+        {/* Optional: show problem_area as context */}
+        <p className="text-sm text-gray-500 italic mb-2">{s.problem_area}</p>
 
-            <div className="flex gap-3 justify-end text-xl">
+        {s.clarifying_questions.map((q, qIdx) => (
+          <div
+            key={qIdx}
+            className="flex justify-between items-center bg-gray-50 rounded-md p-2"
+          >
+            <p className="text-gray-800">{q}</p>
+            <div className="flex gap-3 text-xl">
               <FaEdit
-                onClick={() => toggleEdit(idx)}
+                onClick={() => toggleEdit(`${idx}-${qIdx}`)}
                 className="text-indigo-500 hover:text-indigo-600 cursor-pointer transition"
-                title={q.isEditing ? "Finish Editing" : "Edit"}
+                title="Edit"
               />
               <FaCheckCircle
-                onClick={() => acceptQuestion(idx)}
+                onClick={() => addNote(q)}
                 className="text-green-500 hover:text-green-600 cursor-pointer transition"
                 title="Accept"
               />
               <FaRandom
-                onClick={() => swapQuestion(idx)}
+                onClick={() => swapQuestion(`${idx}-${qIdx}`)}
                 className="text-purple-500 hover:text-purple-600 cursor-pointer transition"
                 title="Swap"
               />
             </div>
           </div>
-        ))
-      ) : (
-        <p className="text-gray-400 italic">No suggestions available.</p>
-      )}
+        ))}
+      </div>
+    ))
+) : (
+  <p className="text-gray-400 italic">No suggestions available.</p>
+)}
+
     </div>
   );
 }
