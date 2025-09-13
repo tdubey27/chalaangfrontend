@@ -8,37 +8,64 @@ export default function DoctorMeeting() {
   const [sessionActive, setSessionActive] = useState(false); // Toggle session state
   const [meetingNotes, setMeetingNotes] = useState([]); // Notes from the meeting
   const [transcripts, setTranscripts] = useState([]); // Live transcripts received
+  const [suggestions, setSuggestions] = useState([]); // Suggestions fetched dynamically
   const [notesOpen, setNotesOpen] = useState(false); // Meeting notes modal visibility
   const [uploadTimer, setUploadTimer] = useState(null); // Timer for periodic uploads
   const [startTime, setStartTime] = useState(null); // Timestamp for session start
   const [recorder, setRecorder] = useState(null); // MediaRecorder instance
   let audioBuffer = []; // Local buffer for audio chunks
 
-  const suggestions = [
-    "What is my current claim status?",
-    "How long will processing take?",
-    "Can I upload documents online?",
-    "Do I need to provide additional info?",
-  ];
+  // Fetch meetingId from localStorage
+  const meetingId = localStorage.getItem("meetingId");
 
   const addNote = (note) => setMeetingNotes((prev) => [...prev, note]);
   const addTranscript = (line) => setTranscripts((prev) => [...prev, line]);
 
-  useEffect(() => {
-    let ws;
-    if (sessionActive) {
-      ws = new WebSocket("ws://localhost:8080"); // Replace with your WebSocket backend URL
-      ws.onmessage = (event) => addTranscript(event.data);
+  /**
+   * Fetch Suggestions and Transcripts API
+   */
+const fetchSuggestionsAndTranscripts = async () => {
+  if (!meetingId) {
+    console.error("Meeting ID is missing from localStorage!");
+    return;
+  }
+
+  try {
+    // Pass meetingId as a query parameter in the URL
+    const response = await fetch(
+      `https://f11f8e9d04d6.ngrok-free.app/api/v1/${meetingId}/transcript`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json", // Expect to receive JSON from the server
+        },
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json(); // Parse the response as JSON
+      console.log("API Response:", data);
+
+      // Update state for suggestions and transcripts with the received data
+      if (data.suggestions) setSuggestions(data.suggestions);
+      if (data.transcripts) setTranscripts(data.transcripts);
+    } else {
+      console.error("API call failed with status:", response.statusText);
     }
-    return () => {
-      if (ws) ws.close();
-    };
-  }, [sessionActive]);
+  } catch (error) {
+    console.error("Error fetching suggestions and transcripts:", error);
+  }
+};
+
+
+  // Fetch suggestions and transcripts on component mount
+  useEffect(() => {
+    fetchSuggestionsAndTranscripts();
+  }, []);
 
   // Start recording function
   const startRecording = async () => {
     try {
-      // Request access to the microphone
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       console.log("Microphone stream obtained:", stream);
 
@@ -51,87 +78,80 @@ export default function DoctorMeeting() {
       console.log("Recording started...");
       audioBuffer = []; // Clear buffer
 
-      // Collect audio chunks into the local buffer
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          audioBuffer.push(event.data); // Push audio chunk into buffer
-          console.log("Audio chunk collected:", event.data); // Debug log
+          audioBuffer.push(event.data);
+          console.log("Audio chunk collected:", event.data);
         }
       };
 
-      mediaRecorder.start(500); // Start recording, collecting data every 500ms
+      mediaRecorder.start(500);
 
-      // Set periodic uploads every 1 second
       const interval = setInterval(() => {
         if (audioBuffer.length > 0) {
-          const chunk = audioBuffer.shift(); // Extract the first chunk
-          const timestamp = Date.now() - initialTimestamp; // Calculate elapsed time
-          sendAudioToBackend(chunk, timestamp); // Send chunk to backend
+          const chunk = audioBuffer.shift();
+          const timestamp = Date.now() - initialTimestamp;
+          sendAudioToBackend(chunk, timestamp);
         } else {
           console.log("Audio buffer empty, waiting for chunks...");
         }
-      }, 1000); // Upload every 1 second
+      }, 4000);
 
-      setUploadTimer(interval); // Save interval reference for stopping later
+      setUploadTimer(interval);
     } catch (error) {
       console.error("Error starting microphone recording:", error);
     }
   };
 
-  // Stop recording function
   const stopRecording = () => {
     if (recorder && recorder.state !== "inactive") {
-      recorder.stop(); // Stop the MediaRecorder
+      recorder.stop();
 
       recorder.onstop = async () => {
         console.log("Recorder stopped. Uploading remaining audio chunks...");
         for (const chunk of audioBuffer) {
-          const timestamp = Date.now() - startTime; // Calculate timestamp for remaining chunks
-          await sendAudioToBackend(chunk, timestamp); // Send remaining chunks
+          const timestamp = Date.now() - startTime;
+          await sendAudioToBackend(chunk, timestamp);
         }
-        audioBuffer = []; // Clear the buffer
+        audioBuffer = [];
       };
     }
 
     if (uploadTimer) {
-      clearInterval(uploadTimer); // Clear periodic timer
+      clearInterval(uploadTimer);
       setUploadTimer(null);
     }
 
     console.log("Recording stopped.");
   };
 
-  // Function to send audio blob and timestamp to the backend
   const sendAudioToBackend = async (chunk, timestamp) => {
     try {
-      // Retrieve meetingId and role from localStorage
-      const meetingId = localStorage.getItem("meetingId");
-      const user = localStorage.getItem("role");
-
-      if (!meetingId || !user) {
-        console.error("Meeting ID or Role is missing from localStorage!");
+      if (!meetingId) {
+        console.error("Meeting ID is missing from localStorage!");
         return;
       }
 
-      // Convert audio chunk into WAV format
       const audioBlob = new Blob([chunk], { type: "audio/wav" });
 
       const formData = new FormData();
-      formData.append("audioBlob", audioBlob); // Attach audio Blob
-      formData.append("timestamp", timestamp.toString()); // Attach timestamp
-      formData.append("meetingId", meetingId); // Attach meeting ID
-      formData.append("user", user); // Attach role
+      formData.append("audioBlob", audioBlob, `audio_${timestamp}.wav`);
+      formData.append("timestamp", timestamp.toString());
+      formData.append("meetingId", meetingId);
+      formData.append("user", localStorage.getItem("role"));
 
-      const response = await fetch("http://localhost:8080/upload-audio-chunk", {
-        method: "POST",
-        body: formData, // Sends audio blob, timestamp, meeting ID, and role
-      });
+      const response = await fetch(
+        "https://9d1d15c9f81f.ngrok-free.app/api/v1/transcribe",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
         console.log("Response from backend:", data);
 
-        // Add transcripts and summary dynamically if present in response
         if (data.transcript) {
           setTranscripts((prev) => [...prev, data.transcript]);
         }
@@ -185,17 +205,16 @@ export default function DoctorMeeting() {
 
       <Footer
         onStart={() => {
-          setSessionActive(true); // Activate session
-          startRecording(); // Start the recording
+          setSessionActive(true);
+          startRecording();
         }}
         onStop={() => {
-          setSessionActive(false); // Deactivate session
-          stopRecording(); // Stop the recording
+          setSessionActive(false);
+          stopRecording();
         }}
         onSummary={() => alert("Summary feature is coming soon!")}
       />
 
-      {/* Modal for Meeting Notes */}
       {notesOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-96 max-h-[80vh] overflow-y-auto shadow-xl">
