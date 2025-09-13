@@ -11,7 +11,7 @@ export default function Footer({ onStart, onStop, onSummary }) {
 
   return (
     <footer className="flex justify-between items-center px-6 py-4 bg-white shadow-md">
-      <div className="text-sm text-gray-500">© 2025 Insurance Meeting</div>
+      <div className="text-sm text-gray-500">© 2025 Acko</div>
 
       <div className="flex gap-3">
         <button
