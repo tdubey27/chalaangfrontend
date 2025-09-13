@@ -1,15 +1,20 @@
 import React from "react";
-import logo from "../assets/logo.png"; // Import your logo image
+import logo from "../assets/logo.png";
 
 export default function Header() {
-  return (
-    <header className="w-full bg-white shadow-md py-4 px-6 flex items-center gap-3 sticky top-0 z-50">
-      {/* Logo */}
-      <img src={logo} alt="Logo" className="w-10 h-10 object-contain" />
+  const role = localStorage.getItem("role");
+  const meetingId = localStorage.getItem("meetingId");
 
-      <h1 className="text-2xl md:text-3xl font-extrabold" style={{ color: "#582CDB" }}>
-        Acko - ClearTalk
-      </h1>
+  return (
+    <header className="flex justify-between items-center px-6 py-4 bg-white shadow-md">
+      <div className="flex items-center gap-3">
+        <img src={logo} alt="App Logo" className="h-10" />
+        <h1 className="text-xl font-bold text-purple-700">Acko - ClearTalk</h1>
+      </div>
+      <div className="text-right">
+        <p className="font-semibold text-purple-600">{role}</p>
+        <p className="text-sm text-gray-500">Meeting ID: {meetingId}</p>
+      </div>
     </header>
   );
 }
