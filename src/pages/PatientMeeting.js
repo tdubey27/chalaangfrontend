@@ -3,29 +3,26 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import Mic from "../components/Mic";
 
-// Import shared recording utilities
-import { startMicrophoneRecording, stopMicrophoneRecording, sendAudioToBackend } from "../utils/recordUtils";
-
 export default function PatientMeeting() {
-  const [sessionActive, setSessionActive] = useState(false); // Toggle session state
+  const [sessionActive, setSessionActive] = useState(false);
   const [transcripts, setTranscripts] = useState([]); // Store live transcripts
   const [recorder, setRecorder] = useState(null); // MediaRecorder instance
   const [uploadTimer, setUploadTimer] = useState(null); // Timer for periodic uploads
   const [startTime, setStartTime] = useState(null); // Timestamp for session start
   const audioBuffer = []; // Buffer to hold audio chunks temporarily
 
-  // Fetch example user and meeting data dynamically
-  const meetingId = localStorage.getItem("meetingId") || "12345"; // Replace with actual dynamic logic
-  const role = "Patient"; // Define user role dynamically if needed
+  // Example user and meeting data (dynamic in real-world use cases):
+  const meetingId = localStorage.getItem("meetingId") || "12345"; // Replace with `localStorage` logic
+  const role = "Patient"; // Set `role` dynamically if needed
 
   const addTranscript = (line) => setTranscripts((prev) => [...prev, line]); // Append transcript lines to list
 
-  // Handle WebSocket for Live Transcripts
+  // Handle WebSocket for Transcripts
   useEffect(() => {
     let ws;
     if (sessionActive) {
-      ws = new WebSocket("ws://localhost:8080"); // Replace with your WebSocket server URL
-      ws.onmessage = (event) => addTranscript(event.data); // Push incoming message to transcript
+      ws = new WebSocket("ws://localhost:8080"); // Replace with your WebSocket URL
+      ws.onmessage = (event) => addTranscript(event.data);
     }
 
     return () => {
@@ -33,30 +30,96 @@ export default function PatientMeeting() {
     };
   }, [sessionActive]);
 
-  // **Start Recording Logic using Utils**
-  const startRecording = () => {
-    startMicrophoneRecording({
-      setRecorder,
-      setStartTime,
-      setUploadTimer,
-      audioBuffer,
-      sendAudioToBackend: (chunk, timestamp) =>
-        sendAudioToBackend(chunk, timestamp, meetingId, role), // Pass meetingId and role dynamically
-    });
-    console.log("Started audio recording for Patient.");
+  // **Start Recording** Functionality
+  const startRecording = async () => {
+    try {
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log("Microphone stream obtained:", stream);
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      setRecorder(mediaRecorder); // Save MediaRecorder instance for later use
+
+      const sessionStartTime = Date.now(); // Start time to calculate elapsed timestamps
+      setStartTime(sessionStartTime);
+
+      console.log("Recording started...");
+      audioBuffer.length = 0; // Clear audio buffer
+
+      // Collect audio chunks into the buffer
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioBuffer.push(event.data); // Add chunk to buffer
+          console.log("Audio chunk collected:", event.data);
+        }
+      };
+
+      mediaRecorder.start(500); // Start recording with data collection every 500ms
+
+      // Set periodic upload every 1 second
+      const interval = setInterval(() => {
+        if (audioBuffer.length > 0) {
+          const chunk = audioBuffer.shift(); // Remove the first chunk
+          const timestamp = Date.now() - sessionStartTime; // Calculate elapsed time
+          sendAudioToBackend(chunk, timestamp); // Upload audio chunk
+        } else {
+          console.log("Audio buffer empty...");
+        }
+      }, 1000); // Upload every 1 second
+
+      setUploadTimer(interval); // Save the interval for stopping later
+    } catch (err) {
+      console.error("Error starting microphone recording:", err);
+    }
   };
 
-  // **Stop Recording Logic using updated Utils**
+  // **Stop Recording** Functionality
   const stopRecording = async () => {
-    stopMicrophoneRecording({
-      recorder,
-      audioBuffer,
-      setUploadTimer,
-      sendAudioToBackend: (chunk, timestamp) =>
-        sendAudioToBackend(chunk, timestamp, meetingId, role), // Pass meetingId and role dynamically
-      startTime,
-    });
-    console.log("Stopped audio recording for Patient.");
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop(); // Stop recording
+      recorder.onstop = async () => {
+        console.log("Stopped recording. Uploading remaining chunks...");
+        for (const chunk of audioBuffer) {
+          const timestamp = Date.now() - startTime; // Calculate timestamp for each chunk
+          await sendAudioToBackend(chunk, timestamp); // Upload remaining chunks
+        }
+        audioBuffer.length = 0; // Clear the buffer
+      };
+    }
+
+    if (uploadTimer) {
+      clearInterval(uploadTimer); // Stop periodic uploads
+      setUploadTimer(null);
+    }
+
+    console.log("Recording stopped.");
+  };
+
+  // **Send Audio to Backend** Functionality
+  const sendAudioToBackend = async (chunk, timestamp) => {
+    try {
+      // Convert audio chunk to WAV format
+      const audioBlob = new Blob([chunk], { type: "audio/wav" });
+
+      const formData = new FormData();
+      formData.append("audioBlob", audioBlob); // Attach WAV audio Blob
+      formData.append("timestamp", timestamp.toString()); // Attach timestamp
+      formData.append("meetingId", meetingId); // Attach meeting ID
+      formData.append("role", role); // Attach role
+
+      const response = await fetch("https://9d1d15c9f81f.ngrok-free.app/api/v1/transcribe", {
+        method: "POST",
+        body: formData, // Send FormData
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.statusText}`);
+      }
+
+      console.log("Audio chunk uploaded successfully.");
+    } catch (error) {
+      console.error("Failed to upload audio chunk:", error);
+    }
   };
 
   return (
@@ -72,7 +135,9 @@ export default function PatientMeeting() {
         {/* Right - Transcript */}
         <div className="w-1/4 flex flex-col items-stretch gap-3">
           <div className="bg-white rounded-2xl shadow p-4 overflow-y-auto max-h-60">
-            <h2 className="text-lg font-bold text-[#582CDB] mb-2">Live Transcript</h2>
+            <h2 className="text-lg font-bold text-[#582CDB] mb-2">
+              Live Transcript
+            </h2>
             {transcripts.length === 0 ? (
               <p className="text-gray-400 italic">No transcript yet...</p>
             ) : (
@@ -93,10 +158,10 @@ export default function PatientMeeting() {
         }}
         onStop={() => {
           setSessionActive(false); // Deactivate session
-          stopRecording(); // Stop recording and cleanup
+          stopRecording(); // Stop recording
         }}
         onSummary={() => alert("Summary is available only for doctors.")}
       />
     </div>
   );
-}
+} 
