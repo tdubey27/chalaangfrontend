@@ -2,23 +2,31 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
-  const [meetingId, setMeetingId] = useState("");
-  const [error, setError] = useState("");
+  const [meetingId, setMeetingId] = useState(""); // Input for meeting ID
+  const [error, setError] = useState(""); // Error messages
   const navigate = useNavigate();
 
+  // Function to join the meeting as a Doctor or Patient
   const joinMeeting = (role) => {
-    if (!meetingId.trim()) {
-      setError("Meeting ID is required!");
+    if (!meetingId.trim() || meetingId.trim().length < 6) {
+      setError("Meeting ID must be at least 6 characters and valid!");
       return;
     }
-    setError(""); // clear any previous error
-    localStorage.setItem("meetingId", meetingId);
-    localStorage.setItem("role", role);
 
-    if (role === "Doctor") {
-      navigate("/doctor");
-    } else {
-      navigate("/patient");
+    try {
+      setError(""); // Clear previous errors
+      localStorage.setItem("meetingId", meetingId.trim()); // Store trimmed Meeting ID
+      localStorage.setItem("role", role); // Store the role (Doctor/Patient)
+
+      // Navigate to the selected role page
+      if (role === "Doctor") {
+        navigate("/doctor");
+      } else {
+        navigate("/patient");
+      }
+    } catch (error) {
+      console.error("Error saving to localStorage:", error);
+      setError("Unable to store meeting details. Please try again!");
     }
   };
 
@@ -29,6 +37,7 @@ export default function Dashboard() {
           Join Meeting
         </h1>
 
+        {/* Meeting ID Input */}
         <input
           type="text"
           value={meetingId}
@@ -39,10 +48,10 @@ export default function Dashboard() {
           }`}
         />
 
-        {error && (
-          <p className="text-red-500 text-sm mb-3">{error}</p>
-        )}
+        {/* Error Message */}
+        {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
 
+        {/* Role Selection Buttons */}
         <div className="flex justify-between">
           <button
             onClick={() => joinMeeting("Doctor")}
