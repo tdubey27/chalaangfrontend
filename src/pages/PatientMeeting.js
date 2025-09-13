@@ -74,26 +74,28 @@ export default function PatientMeeting() {
   };
 
   // **Stop Recording** Functionality
-  const stopRecording = async () => {
-    if (recorder && recorder.state !== "inactive") {
-      recorder.stop(); // Stop recording
-      recorder.onstop = async () => {
-        console.log("Stopped recording. Uploading remaining chunks...");
-        for (const chunk of audioBuffer) {
-          const timestamp = Date.now() - startTime; // Calculate timestamp for each chunk
-          await sendAudioToBackend(chunk, timestamp); // Upload remaining chunks
-        }
-        audioBuffer.length = 0; // Clear the buffer
-      };
+const stopRecording = () => {
+  try {
+    if (recorder) {
+      if (recorder.state !== "inactive") {
+        recorder.stop();
+      }
+      recorder.ondataavailable = null; // 🚫 disable callback
+      setRecorder(null);
     }
 
     if (uploadTimer) {
-      clearInterval(uploadTimer); // Stop periodic uploads
+      clearInterval(uploadTimer); // 🚫 stop periodic uploads
       setUploadTimer(null);
     }
 
-    console.log("Recording stopped.");
-  };
+    audioBuffer.current = []; // 🚫 clear buffer so nothing is sent
+    console.log("✅ Recording stopped and uploads halted.");
+  } catch (err) {
+    console.error("Error stopping recording:", err);
+  }
+};
+
 
   // **Send Audio to Backend** Functionality
   const sendAudioToBackend = async (chunk, timestamp) => {
@@ -107,7 +109,7 @@ export default function PatientMeeting() {
       formData.append("meetingId", meetingId); // Attach meeting ID
       formData.append("role", role); // Attach role
 
-      const response = await fetch("https://9d1d15c9f81f.ngrok-free.app/api/v1/transcribe", {
+      const response = await fetch("http://localhost:8001/api/v1/transcribe", {
         method: "POST",
         body: formData, // Send FormData
       });

@@ -230,19 +230,26 @@ const startRecording = async () => {
 
 const stopRecording = () => {
   try {
-    if (recorderRef && recorderRef.state !== "inactive") {
-      recorderRef.stop();
+    if (recorder) {
+      if (recorder.state !== "inactive") {
+        recorder.stop();
+      }
+      recorder.ondataavailable = null; // 🚫 disable callback
+      setRecorder(null);
     }
-    if (uploadTimerRef) {
-      clearInterval(uploadTimerRef);
-      uploadTimerRef = null;
+
+    if (uploadTimer) {
+      clearInterval(uploadTimer); // 🚫 stop periodic uploads
+      setUploadTimer(null);
     }
-    // Optionally process remaining queued chunks before fully stopping:
-    processQueue().catch((e) => console.error("Error processing remaining queue:", e));
-  } catch (e) {
-    console.error("Error stopping recording:", e);
+
+    audioBuffer.current = []; // 🚫 clear buffer so nothing is sent
+    console.log("✅ Recording stopped and uploads halted.");
+  } catch (err) {
+    console.error("Error stopping recording:", err);
   }
 };
+
 
 console.log("trans", trans)
   return (
